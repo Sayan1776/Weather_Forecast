@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title> Weather Forecast</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root{--card-bg: rgba(255,255,255,0.05); --glass-border: rgba(255,255,255,0.08);}
+    html,body{height:100%;}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto;color:#f3f4f6;background:linear-gradient(180deg,#081222 0%, #041022 100%);overflow-x:hidden;}
+
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;}
+    .card-app{width:100%;max-width:1120px;border-radius:16px;padding:18px;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));border:1px solid var(--glass-border);box-shadow:0 18px 50px rgba(2,6,23,0.65);backdrop-filter:blur(8px) saturate(120%);}
+
+    .search-row{gap:.6rem;display:flex}
+    .search-row .form-control{border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit}
+
+    .current{display:flex;gap:1.2rem;align-items:center;padding:18px;border-radius:12px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.03);}
+    .temp-big{font-size:64px;font-weight:700;line-height:0.9}
+    .meta{opacity:.95}
+    .small-muted{opacity:.86}
+
+    .forecast-strip{display:flex;gap:.7rem;overflow-x:auto;padding:12px}
+    .f-card{min-width:130px;border-radius:12px;padding:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.03);text-align:center;}
+
+    .historic-strip{display:flex;gap:.7rem;overflow-x:auto;padding:12px}
+
+    .sky{position:fixed;inset:0;z-index:-3;pointer-events:none;transition:background 1s ease}
+    .clouds{position:fixed;left:-10%;top:3%;width:120%;height:240px;z-index:-2;opacity:0.14;filter:blur(6px);pointer-events:none}
+    .rain-layer{position:fixed;inset:0;z-index:-1;pointer-events:none;display:none}
+    .raindrop{position:absolute;top:-10%;width:2px;height:60px;opacity:0.25;animation:fall linear;transform:translateX(0)}
+    @keyframes fall{to{transform:translateY(120vh);opacity:0}}
+
+    .wind-lines{position:fixed;left:0;right:0;bottom:6%;height:60px;pointer-events:none;z-index:-1}
+    .wind-line{height:6px;border-radius:999px;opacity:0.08;filter:blur(0.8px);animation:wind 6s linear infinite}
+    @keyframes wind{0%{transform:translateX(-20%)}100%{transform:translateX(120%)}}
+
+    .info-grid .col{padding:.6rem}
+    .muted-small{opacity:.78;font-size:.9rem}
+    .rounded-soft{border-radius:12px}
+
+    @media (max-width:768px){.temp-big{font-size:44px} .f-card{min-width:110px}}
+  </style>
+</head>
+<body>
+  
+  
+
+  <div class="sky" id="sky"></div>
+  <div class="clouds" id="clouds"><img src="https://images.unsplash.com/photo-1503264116251-35a269479413?q=80&w=1600&auto=format&fit=crop&sat=-100" style="width:100%;height:100%;object-fit:cover"/></div>
+  <div class="rain-layer" id="rain"></div>
+  <div class="wind-lines" id="wind"><div class="wind-line" style="width:34%;background:linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));"></div></div>
+
+  <div class="wrap">
+    <div class="card-app" role="main" aria-label="Rohit Weather Forecast app">
+      <div class="row align-items-center">
+        <div class="col-12 col-md-8">
+          <h2 class="mb-1">Weather Forecast</h2>
+          <div class="muted-small">Live conditions, next 5 days forecast, last 5 days history, and advanced details</div>
+        </div>
+        <div class="col-12 col-md-4 text-md-end mt-2 mt-md-0">
+          <div class="muted-small">Units: Metric (°C, km/h)</div>
+        </div>
+      </div>
+
+      <hr style="opacity:.06"/>
+
+      <div class="row mb-3">
+        <div class="col-12 col-md-9">
+          <div class="search-row">
+            <input id="city" class="form-control" placeholder="Search city (e.g. Mumbai, New York, Tokyo)"/>
+            <button id="searchBtn" class="btn btn-primary">Search</button>
+            <button id="geoBtn" class="btn btn-outline-light" title="Use my location"><i class="fa fa-location-arrow"></i></button>
+          </div>
+          <div class="mt-2 muted-small">Tip: type city name. If results aren't found, try a nearby major city.</div>
+        </div>
+        <div class="col-12 col-md-3 text-md-end mt-2 mt-md-0">
+          <div class="muted-small">Local time: <span id="localTime">--:--</span></div>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-12 col-lg-6">
+          <div class="current rounded-soft">
+            <div>
+              <div class="temp-big" id="tempNow">--°</div>
+              <div class="small-muted" id="condNow">—</div>
+            </div>
+            <div class="ms-auto text-end">
+              <div class="meta">Feels: <strong id="feels">—</strong></div>
+              <div class="meta">Humidity: <strong id="hum">—</strong>%</div>
+              <div class="meta">Precip: <strong id="precip">—</strong> mm</div>
+              <div class="meta">Wind: <strong id="windSpd">—</strong> km/h (<span id="windDir">—</span>)</div>
+            </div>
+          </div>
+
+          <div class="mt-3 p-3 rounded-soft" style="background:var(--card-bg);border:1px solid rgba(255,255,255,0.03)">
+            <div class="row info-grid">
+              <div class="col small-muted">Pressure<br><strong id="pressure">—</strong> hPa</div>
+              <div class="col small-muted">Visibility<br><strong id="visibility">—</strong> km</div>
+              <div class="col small-muted">Clouds<br><strong id="cloudsPct">—</strong>%</div>
+              <div class="col small-muted">UV Index<br><strong id="uvi">—</strong></div>
+            </div>
+            <div class="mt-2 muted-small">Sunrise <strong id="sunrise">—</strong> • Sunset <strong id="sunset">—</strong></div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+          <div class="p-3 rounded-soft" style="background:var(--card-bg);border:1px solid rgba(255,255,255,0.03)">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="small-muted">Next 5 days</div>
+              <div class="small-muted">Chance of rain: <strong id="popOverall">—</strong></div>
+            </div>
+            <div class="forecast-strip" id="forecastFuture"></div>
+          </div>
+
+          <div class="mt-3 p-3 rounded-soft" style="background:var(--card-bg);border:1px solid rgba(255,255,255,0.03)">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="small-muted">Last 5 days (observed)</div>
+              <div class="small-muted small">source: OpenWeatherMap (historic)</div>
+            </div>
+            <div class="historic-strip" id="forecastPast"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3 p-3 rounded-soft" style="background:var(--card-bg);border:1px solid rgba(255,255,255,0.03)">
+        <div class="row g-2">
+          <div class="col-12 col-md-4 small-muted">Localised: <strong id="locationName">—</strong></div>
+          <div class="col-12 col-md-3 small-muted">Latitude: <strong id="lat">—</strong></div>
+          <div class="col-12 col-md-3 small-muted">Longitude: <strong id="lon">—</strong></div>
+          <div class="col-12 col-md-2 small-muted">Timezone: <strong id="tz">—</strong></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <script>
+    // OpenWeather implementation using the provided key
+    const KEY = "YOUR_OPENWEATHER_API_KEY_HERE"; // Replace with your actual API key
+    const GEO_URL = 'https://api.openweathermap.org/geo/1.0/direct';
+    const WEATHER_CURR = 'https://api.openweathermap.org/data/2.5/weather';
+    const WEATHER_FORECAST = 'https://api.openweathermap.org/data/2.5/forecast';
+    const ONECALL_TMPL = 'https://api.openweathermap.org/data/2.5/onecall';
+
+    function setText(id, txt){ document.getElementById(id).textContent = txt ?? '—'; }
+    function showAlert(msg){ alert(msg); }
+    function updateLocalTime(tz){ const el = document.getElementById('localTime'); if(!tz){ el.textContent = new Date().toLocaleTimeString(); return; } try{ el.textContent = new Date().toLocaleString('en-US',{timeZone:tz,hour:'2-digit',minute:'2-digit',hour12:false}).split(',').pop().trim(); } catch(e){ el.textContent = new Date().toLocaleTimeString(); } }
+    setInterval(()=>updateLocalTime(document.getElementById('tz').textContent || null),30000);
+
+    $('#searchBtn').on('click', ()=>{ const q = $('#city').val().trim(); if(!q) return showAlert('Enter a city'); geocode(q); });
+    $('#city').on('keypress', (e)=>{ if(e.key==='Enter') $('#searchBtn').click(); });
+    $('#geoBtn').on('click', ()=>{ if(!navigator.geolocation){ showAlert('Geolocation not supported'); return; } navigator.geolocation.getCurrentPosition(pos=>{ reverseGeocode(pos.coords.latitude,pos.coords.longitude); }, err=>{ showAlert('Location denied or unavailable'); }); });
+
+    async function geocode(q){
+      try{
+        const url = `${GEO_URL}?q=${encodeURIComponent(q)}&limit=1&appid=${KEY}`;
+        const res = await fetch(url); if(!res.ok) throw new Error('geo error '+res.status); const data = await res.json();
+        if(!data || data.length===0) return showAlert('Location not found');
+        const place = data[0];
+        setText('locationName', `${place.name}${place.state? ', '+place.state: ''}, ${place.country}`);
+        setText('lat', place.lat.toFixed(4)); setText('lon', place.lon.toFixed(4));
+        // fetch weather
+        fetchWeather(place.lat, place.lon);
+      } catch(e){ console.error(e); showAlert('Location lookup error'); }
+    }
+
+    async function reverseGeocode(lat, lon){
+      try{
+        const url = `${GEO_URL}?lat=${lat}&lon=${lon}&limit=1&appid=${KEY}`;
+        const res = await fetch(url); if(!res.ok) throw new Error('rev geo '+res.status); const data = await res.json();
+        if(!data || data.length===0) return showAlert('Location not found for coordinates');
+        const place = data[0]; setText('locationName', `${place.name}${place.state? ', '+place.state: ''}, ${place.country}`);
+        setText('lat', place.lat.toFixed(4)); setText('lon', place.lon.toFixed(4));
+        fetchWeather(place.lat, place.lon);
+      } catch(e){ console.error(e); showAlert('Reverse geocode failed'); }
+    }
+
+    async function fetchWeather(lat, lon){
+      try{
+        const curUrl = `${WEATHER_CURR}?lat=${lat}&lon=${lon}&units=metric&appid=${KEY}`;
+        const curRes = await fetch(curUrl); if(!curRes.ok) throw new Error('current fetch '+curRes.status); const cur = await curRes.json();
+        renderCurrent(cur);
+
+        const fUrl = `${WEATHER_FORECAST}?lat=${lat}&lon=${lon}&units=metric&appid=${KEY}`;
+        const fRes = await fetch(fUrl); if(!fRes.ok) throw new Error('forecast fetch '+fRes.status); const f = await fRes.json();
+        renderForecastFrom3h(f);
+
+        await fetchHistorical(lat, lon);
+
+      } catch(e){ console.error(e); showAlert('Error fetching weather data. See console.'); }
+    }
+
+    function renderCurrent(cur){
+      try{
+        setText('tempNow', Math.round(cur.main.temp)+'°C');
+        setText('condNow', cur.weather && cur.weather[0] ? cur.weather[0].description : '—');
+        setText('feels', cur.main ? Math.round(cur.main.feels_like)+'°C' : '—');
+        setText('hum', cur.main ? cur.main.humidity : '—');
+        let precip = '0.0';
+        if(cur.rain && (cur.rain['1h'] || cur.rain['3h'])) precip = (cur.rain['1h']||cur.rain['3h']).toFixed(1);
+        else precip = '0.0';
+        setText('precip', precip);
+        setText('pressure', cur.main ? cur.main.pressure : '—');
+        setText('visibility', cur.visibility ? (cur.visibility/1000).toFixed(1) : '—');
+        setText('cloudsPct', cur.clouds ? cur.clouds.all : '—');
+        setText('windSpd', cur.wind ? Math.round(cur.wind.speed*3.6) : '—');
+        setText('windDir', cur.wind && cur.wind.deg ? degToCompass(cur.wind.deg) : '—');
+        if(cur.sys){ setText('sunrise', new Date(cur.sys.sunrise*1000).toLocaleTimeString()); setText('sunset', new Date(cur.sys.sunset*1000).toLocaleTimeString()); }
+        setDynamic(cur);
+      } catch(e){ console.error(e); }
+    }
+
+    function renderForecastFrom3h(f){
+      try{
+        const buckets = {};
+        f.list.forEach(item => {
+          const d = new Date(item.dt*1000);
+          const key = d.toISOString().split('T')[0];
+          if(!buckets[key]) buckets[key] = { temps:[], pops:[], icons:[], date: key };
+          buckets[key].temps.push(item.main.temp);
+          if(item.pop !== undefined) buckets[key].pops.push(item.pop*100);
+          if(item.weather && item.weather[0]) buckets[key].icons.push(item.weather[0].icon);
+        });
+        const keys = Object.keys(buckets).slice(0,6);
+        let html=''; let overallPop = 0;
+        keys.forEach((k, idx) => {
+          const b = buckets[k];
+          const max = Math.max(...b.temps); const min = Math.min(...b.temps);
+          const pop = b.pops.length ? Math.round(b.pops.reduce((a,c)=>a+c,0)/b.pops.length) : 0;
+          overallPop = Math.max(overallPop, pop);
+          const icon = b.icons.length ? b.icons[Math.floor(b.icons.length/2)] : '';
+          const iconUrl = icon ? `https://openweathermap.org/img/wn/${icon}@2x.png` : '';
+          const date = new Date(k);
+          html += `<div class="f-card"><div class="muted-small">${date.toLocaleDateString(undefined,{weekday:'short'})}</div><div class="small-muted">${date.toLocaleDateString()}</div><div style="height:8px"></div><img src="${iconUrl}" width="64" height="64"/><div class="mt-1"><strong>${Math.round(max)} / ${Math.round(min)}°C</strong></div><div class="muted-small">Pop: ${pop}%</div></div>`;
+        });
+        $('#forecastFuture').html(html); setText('popOverall', overallPop+'%');
+      } catch(e){ console.error(e); $('#forecastFuture').html('<div class="muted-small">Forecast unavailable</div>'); }
+    }
+
+    async function fetchHistorical(lat, lon){
+      try{
+        const now = Math.floor(Date.now()/1000);
+        const past = [];
+        for(let i=1;i<=5;i++){
+          const ts = now - i*86400;
+          const url = `${ONECALL_TMPL}/timemachine?lat=${lat}&lon=${lon}&dt=${ts}&units=metric&appid=${KEY}`;
+          try{
+            const r = await fetch(url);
+            if(!r.ok){ console.warn('timemachine', r.status); past.push(null); continue; }
+            const j = await r.json();
+            const hourly = j.hourly || [];
+            if(hourly.length){
+              const temps = hourly.map(h=>h.temp); const max = Math.max(...temps); const min = Math.min(...temps);
+              const prec = hourly.reduce((a,h)=>a + (h.rain && h.rain['1h'] ? h.rain['1h'] : 0), 0);
+              past.push({date: new Date(ts*1000).toISOString().split('T')[0], max, min, prec});
+            } else {
+              past.push(null);
+            }
+          } catch(e){ console.error('hist fetch err', e); past.push(null); }
+        }
+        const entries = past.reverse();
+        let html='';
+        entries.forEach(e=>{
+          if(!e) { html += `<div class="f-card"><div class="muted-small">Date</div><div class="small-muted">Data not available</div></div>`; }
+          else { const date = new Date(e.date); html += `<div class="f-card"><div class="muted-small">${date.toLocaleDateString(undefined,{weekday:'short'})}</div><div class="small-muted">${date.toLocaleDateString()}</div><div style="height:8px"></div><div><strong>${Math.round(e.max)} / ${Math.round(e.min)}°C</strong></div><div class="muted-small">Precip: ${e.prec.toFixed(1)} mm</div></div>`; }
+        });
+        $('#forecastPast').html(html);
+      } catch(e){ console.error(e); $('#forecastPast').html('<div class="muted-small">Historical data unavailable</div>'); }
+    }
+
+    function setDynamic(cur){
+      const hour = new Date().getHours();
+      const condition = cur.weather && cur.weather[0] ? cur.weather[0].main.toLowerCase() : 'clear';
+      const description = cur.weather && cur.weather[0] ? cur.weather[0].description.toLowerCase() : '';
+      
+      let bg = '';
+      
+      // Determine time period
+      let time = 'night';
+      if (hour >= 5 && hour < 11) time = 'morning';
+      else if (hour >= 11 && hour < 16) time = 'noon';
+      else if (hour >= 16 && hour < 19) time = 'afternoon';
+      else if (hour >= 19 && hour < 21) time = 'dusk';
+      
+      // Helper to check weather type
+      const isRain = condition.includes('rain') || condition.includes('drizzle') || condition.includes('thunder');
+      const isCloudy = condition.includes('cloud');
+      const isClear = condition.includes('clear') || condition.includes('sun');
+
+      // Define gradients
+      if (isRain) {
+        if (time === 'night') bg = 'linear-gradient(180deg, #141E30 0%, #243B55 100%)'; // Dark rainy night
+        else if (time === 'dusk') bg = 'linear-gradient(180deg, #2C3E50 0%, #4CA1AF 100%)'; // Rainy sunset
+        else bg = 'linear-gradient(180deg, #3E5151 0%, #DECBA4 100%)'; // Rainy day (gray/moody)
+      } 
+      else if (isCloudy) {
+        if (time === 'night') bg = 'linear-gradient(180deg, #232526 0%, #414345 100%)'; // Cloudy night
+        else if (time === 'dusk') bg = 'linear-gradient(180deg, #4B79A1 0%, #283E51 100%)'; // Cloudy dusk
+        else if (time === 'morning') bg = 'linear-gradient(180deg, #83a4d4 0%, #b6fbff 100%)'; // Cloudy morning
+        else bg = 'linear-gradient(180deg, #6190E8 0%, #A7BFE8 100%)'; // Cloudy day
+      }
+      else {
+        // Clear/Sunny/Default
+        switch(time) {
+          case 'morning': 
+            bg = 'linear-gradient(180deg, #FF512F 0%, #F09819 100%)'; // Sunrise orange
+            break;
+          case 'noon': 
+            bg = 'linear-gradient(180deg, #2980B9 0%, #6DD5FA 100%)'; // Bright blue
+            break;
+          case 'afternoon': 
+            bg = 'linear-gradient(180deg, #56CCF2 0%, #2F80ED 100%)'; // Deep blue
+            break;
+          case 'dusk': 
+            bg = 'linear-gradient(180deg, #f12711 0%, #f5af19 100%)'; // Sunset red/orange
+            break;
+          case 'night': 
+            bg = 'linear-gradient(180deg, #0f2027 0%, #203a43 50%, #2c5364 100%)'; // Deep night
+            break;
+        }
+      }
+
+      document.getElementById('sky').style.background = bg;
+      
+      // Update elements based on weather
+      const clouds = (cur.clouds && cur.clouds.all) ? cur.clouds.all : 0; 
+      document.getElementById('clouds').style.opacity = Math.min(0.8, 0.08 + clouds/120);
+      
+      const wind = cur.wind ? cur.wind.speed*3.6 : 0; 
+      document.querySelectorAll('.wind-line').forEach(el=>el.style.animationDuration = Math.max(2.5, 10 - Math.min(8, wind)) + 's');
+      
+      showRain(!!isRain);
+    }
+
+    function showRain(flag){ const $r = $('#rain'); if(flag){ $r.show().empty(); const drops=80; for(let i=0;i<drops;i++){ const left=Math.random()*100; const h=30+Math.random()*100; const dur=(0.7+Math.random()*0.9).toFixed(2); const delay=(-Math.random()*6).toFixed(2); const el = $(`<div class="raindrop"></div>`).css({left:left+'%',height:h+'px',animationDuration:dur+'s',top:(-10-Math.random()*20)+'vh',animationDelay:delay+'s',background:'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02))'}); $r.append(el);} } else { $r.hide().empty(); } }
+
+    (function init(){ const defaultCity='Mumbai'; $('#city').val(defaultCity); setTimeout(()=>$('#searchBtn').click(),400); })();
+  </script>
+  <!-- LOGIN OVERLAY (place this before </body>) -->
+<style>
+  #loginOverlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(180deg, #081222 0%, #041022 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 99999;
+    transition: opacity 1.2s ease;
+  }
+  #loginBox {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 30px 40px;
+    text-align: center;
+    color: #fff;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  #loginBox input {
+    width: 100%;
+    margin: 6px 0;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    text-align: center;
+  }
+  #loginBox button {
+    width: 100%;
+    margin-top: 10px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+  }
+  #loginError {
+    color: #ffbaba;
+    font-size: 0.9rem;
+    margin-top: 6px;
+    display: none;
+  }
+  #usernameDisplay {
+    position: fixed;
+    top: 10px;
+    right: 18px;
+    font-size: 0.9rem;
+    color: #cbd5e1;
+    opacity: 0.9;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #logoutBtn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #fff;
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  #logoutBtn:hover {
+    background: rgba(255,255,255,0.2);
+  }
+</style>
+
+<div id="loginOverlay">
+  <div id="loginBox">
+    <h4> Weather Access</h4>
+    <p class="small text-secondary mb-2" style="opacity:0.8;">Enter any username and password <strong>12345</strong></p>
+    <input type="text" id="loginUser" placeholder="Username">
+    <input type="password" id="loginPass" placeholder="Password">
+    <button id="loginBtn">Login</button>
+    <div id="loginError">Incorrect password. Use 12345.</div>
+  </div>
+</div>
+
+<div id="usernameDisplay" style="display:none;">
+  <span id="userNameText"></span>
+  <button id="logoutBtn">Logout</button>
+</div>
+
+<script>
+  const overlay = document.getElementById("loginOverlay");
+  const btn = document.getElementById("loginBtn");
+  const err = document.getElementById("loginError");
+  const userBox = document.getElementById("usernameDisplay");
+  const userText = document.getElementById("userNameText");
+  const logoutBtn = document.getElementById("logoutBtn");
+
+  btn.addEventListener("click", () => {
+    const user = document.getElementById("loginUser").value.trim();
+    const pass = document.getElementById("loginPass").value.trim();
+    if (!user) { err.textContent = "Enter a username"; err.style.display = "block"; return; }
+    if (pass !== "12345") { err.textContent = "Incorrect password"; err.style.display = "block"; return; }
+
+    // store username
+    localStorage.setItem("rw_user", user);
+    userText.textContent = "User: " + user;
+    userBox.style.display = "flex";
+
+    // fade out overlay
+    overlay.style.opacity = "0";
+    setTimeout(() => overlay.style.display = "none", 1200);
+  });
+
+  logoutBtn.addEventListener("click", () => {
+    localStorage.removeItem("rw_user");
+    userBox.style.display = "none";
+    overlay.style.display = "flex";
+    overlay.style.opacity = "1";
+  });
+
+  // auto login check
+  window.addEventListener("load", () => {
+    const u = localStorage.getItem("rw_user");
+    if (u) {
+      overlay.style.display = "none";
+      userText.textContent = "User: " + u;
+      userBox.style.display = "flex";
+    }
+  });
+</script>
+
+</body>
+</html>
